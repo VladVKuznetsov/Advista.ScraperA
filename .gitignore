@@ -1,0 +1,38 @@
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache/options
+.vs/
+
+# Visual Studio Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Application settings
+appsettings.json
+appsettings.*.json
+
+# Local environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
