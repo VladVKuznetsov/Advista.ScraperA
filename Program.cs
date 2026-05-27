@@ -25,7 +25,8 @@ var options = new AgentScraperOptions
 await using var scraper = new PlaywrightAgentScraper(claude, options);
 
 var departments = await scraper.ExtractAsync(
-    url: "https://www.bilglass.no/avdeling",
+    //url: "https://www.bilglass.no/avdeling",
+    url: "https://bilxtra.no/bilxtraverksted/bilverksted",
     prompt: "Find all department/branch offices. " +
             "If there are region or county filters, click each one to reveal its departments. " +
             "For every department extract: title, addressLine, addressCity, addressZip, telephone, email."
