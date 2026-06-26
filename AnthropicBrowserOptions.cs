@@ -33,6 +33,13 @@ public sealed class AnthropicBrowserOptions
     /// <summary>Run browser in headless mode. Set false to watch it work.</summary>
     public bool Headless { get; set; } = true;
 
+    /// <summary>
+    /// When true, the Chromium browser binaries are installed on first use if missing.
+    /// The Playwright driver itself must already be deployed (a linux-x64 publish) — only the
+    /// browser is installed here, not the driver or OS-level library dependencies.
+    /// </summary>
+    public bool AutoInstallBrowsers { get; set; } = true;
+
     /// <summary>Navigation timeout in ms.</summary>
     public float NavigationTimeoutMs { get; set; } = 30_000;
 

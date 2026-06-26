@@ -6,6 +6,16 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
 
+// ── Browser install ─────────────────────────────────────────────────────────────
+// OS-agnostic way to download the Playwright browser binaries (no PowerShell needed):
+//   dotnet AgentScraper.dll --install-browsers              (browser only)
+//   sudo dotnet AgentScraper.dll --install-browsers --with-deps   (browser + OS libraries)
+if (args.Contains("--install-browsers"))
+    return Microsoft.Playwright.Program.Main(
+        args.Contains("--with-deps")
+            ? new[] { "install", "--with-deps", "chromium" }
+            : new[] { "install", "chromium" });
+
 // ── Config ────────────────────────────────────────────────────────────────────
 // appsettings.development.json is the committed template (placeholder ApiKey); appsettings.json
 // holds the real key and is gitignored. It is layered on top, so its values win where they overlap.
@@ -56,7 +66,7 @@ var (departments, parseError) = await extractor.ExtractAsync(
 if (!string.IsNullOrEmpty(parseError))
 {
     Console.WriteLine($"\n❌ Extraction failed: {parseError}");
-    return;
+    return 1;
 }
 
 Console.WriteLine($"\n✅ Extracted {departments.Count} departments\n");
@@ -71,3 +81,5 @@ Console.WriteLine(json);
 
 await File.WriteAllTextAsync("departments.json", json);
 Console.WriteLine("\nSaved to departments.json");
+
+return 0;

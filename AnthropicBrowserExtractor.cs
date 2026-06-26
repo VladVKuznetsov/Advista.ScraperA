@@ -53,6 +53,9 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
             //    it is torn down when this method returns, success or failure;
             //  - any setup failure then surfaces through parseError below rather than at construction.
             var options = _anthropicOptions.Value;
+
+            EnsureBrowsersInstalled(options);
+
             var claude = new AnthropicClient(new ClientOptions
             {
                 ApiKey = options.ApiKey,
@@ -73,5 +76,26 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
         {
             return (new List<DepartmentAnthAuto>(), $"{ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private static int _browsersInstalled; // 0 = not yet attempted this process
+
+    /// <summary>
+    /// Installs the Chromium browser binaries once per process (if <see cref="AnthropicBrowserOptions.AutoInstallBrowsers"/>).
+    /// Requires the Playwright driver to already be present; a missing driver throws here and is
+    /// surfaced as parseError by the caller.
+    /// </summary>
+    private void EnsureBrowsersInstalled(AnthropicBrowserOptions options)
+    {
+        if (!options.AutoInstallBrowsers) return;
+        if (Interlocked.Exchange(ref _browsersInstalled, 1) != 0) return; // already done this process
+
+        if (_managerOptions.Value.VerboseChainProcess)
+            _logger.LogInformation("Ensuring Playwright browser (chromium) is installed…");
+
+        var exitCode = Microsoft.Playwright.Program.Main(new[] { "install", "chromium" });
+        if (exitCode != 0)
+            throw new InvalidOperationException(
+                $"Playwright 'install chromium' failed (exit {exitCode}). Is the linux-x64 driver deployed?");
     }
 }
