@@ -1,41 +1,72 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
-using AgentScraper;
-using Anthropic;
+using Advista.Tasks._180no.CrawlerLocators.Components.Anthropic.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Serilog;
 
 // ── Config ────────────────────────────────────────────────────────────────────
-var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(
-    await File.ReadAllTextAsync("appsettings.json"))
-    ?? throw new InvalidOperationException("Could not parse appsettings.json.");
+// appsettings.development.json is the committed template (placeholder ApiKey); appsettings.json
+// holds the real key and is gitignored. It is layered on top, so its values win where they overlap.
+var config = new ConfigurationBuilder()
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.development.json", optional: true)
+    .AddJsonFile("appsettings.json", optional: true)
+    .Build();
 
-var apiKey = settings.TryGetValue("ANTHROPIC_API_KEY", out var k) && !string.IsNullOrEmpty(k)
-    ? k
-    : throw new InvalidOperationException("ANTHROPIC_API_KEY not set in appsettings.json.");
+var anthropicOptions = config.GetSection("AnthropicBrowserOptions").Get<AnthropicBrowserOptions>()
+    ?? throw new InvalidOperationException("AnthropicBrowserOptions section missing from appsettings.");
 
-Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", apiKey);
-var claude = new AnthropicClient();
+if (string.IsNullOrWhiteSpace(anthropicOptions.ApiKey) || anthropicOptions.ApiKey == "YOUR_ANTHROPIC_API_KEY_HERE")
+    throw new InvalidOperationException("AnthropicBrowserOptions.ApiKey not set — copy appsettings.development.json to appsettings.json and add your key.");
 
-var options = new AgentScraperOptions
-{
-    Headless = false,   // set false to watch the browser
-    Verbose  = true,
-    MaxIterations = 25
-};
+var managerOptions = config.GetSection("ManagerOptions").Get<ManagerOptions>() ?? new ManagerOptions();
 
-// ── Run ───────────────────────────────────────────────────────────────────────
-await using var scraper = new PlaywrightAgentScraper(claude, options);
+// ── Logging (Serilog) ───────────────────────────────────────────────────────────
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
 
-var departments = await scraper.ExtractAsync(
-    //url: "https://www.bilglass.no/avdeling",
-    url: "https://bilxtra.no/bilxtraverksted/bilverksted",
-    prompt: "Find all department/branch offices. " +
-            "If there are region or county filters, click each one to reveal its departments. " +
-            "For every department extract: title, addressLine, addressCity, addressZip, telephone, email."
+using var loggerFactory = LoggerFactory.Create(b => b.AddSerilog(Log.Logger, dispose: true));
+
+var extractor = new AnthropicBrowserExtractor(
+    Options.Create(anthropicOptions),
+    Options.Create(managerOptions),
+    loggerFactory.CreateLogger<AnthropicBrowserExtractor>());
+
+// Human tips: tell the agent where the department list lives and which element to follow.
+// The model matches these against the real DOM candidates (the items are JS-navigation <li>s
+// with no href, so the agent clicks them and captures the resulting URL).
+var tips = """
+    The department list is a <ul> whose class looks like:
+      "[&_>_li]:break-inside_avoid column-count_1 lg:column-count_2 cg_5xl"
+    Each department is an <li> (class like
+      "d_flex ai_center jc_space-between py_md bd-b_1px_solid_{colors.border} focus:ring-c_primary cursor_pointer")
+    showing the store name and opening hours. Follow every such <li> to open its detail subpage,
+    and read the department data there.
+    """;
+
+var (departments, parseError) = await extractor.ExtractAsync(
+    url: "https://www.heidenreich.no/butikker",
+    tips: tips
 );
 
 // ── Output ────────────────────────────────────────────────────────────────────
+if (!string.IsNullOrEmpty(parseError))
+{
+    Console.WriteLine($"\n❌ Extraction failed: {parseError}");
+    return;
+}
+
 Console.WriteLine($"\n✅ Extracted {departments.Count} departments\n");
 
-var json = JsonSerializer.Serialize(departments, new JsonSerializerOptions { WriteIndented = true });
+var jsonOptions = new JsonSerializerOptions
+{
+    WriteIndented = true,
+    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // keep æ/ø/å and + literal, not \uXXXX
+};
+var json = JsonSerializer.Serialize(departments, jsonOptions);
 Console.WriteLine(json);
 
 await File.WriteAllTextAsync("departments.json", json);

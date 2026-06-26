@@ -25,9 +25,9 @@ obj/
 *.snupkg
 .nuget/
 
-# Application settings
+# Application settings — ignore the base file, but allow environment overrides (appsettings.*.json)
 appsettings.json
-appsettings.*.json
+!appsettings.*.json
 
 # Local environment
 .env
