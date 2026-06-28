@@ -45,6 +45,7 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         string prompt,
         string? tips = null,
         string defaultCountry = "NO",
+        string? openListSelector = null,
         CancellationToken ct = default)
     {
         var browser = await GetBrowserAsync();
@@ -62,6 +63,7 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
             Timeout = _options.NavigationTimeoutMs
         });
         await DismissCookieBannerAsync(page); // consent is stored on the context → only needed once
+        await OpenListAsync(page, openListSelector); // reveal the list if it's behind a trigger (e.g. a drawer)
         var listingUrl = page.Url;
 
         // ── Phase 1: pick which clickable elements are the per-department links (tips guide this) ──
@@ -223,6 +225,24 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         return await ExtractDepartmentFromPageAsync(page, url, prompt, tips, defaultCountry, ct);
     }
 
+    /// <summary>
+    /// Clicks <paramref name="selector"/> once to reveal a hidden store list (e.g. a drawer/modal
+    /// opener) before discovery. No-op when the selector is null/empty or not present on the page.
+    /// </summary>
+    private async Task OpenListAsync(IPage page, string? selector)
+    {
+        if (string.IsNullOrWhiteSpace(selector)) return;
+        var trigger = page.Locator(selector).First;
+        if (await trigger.CountAsync() == 0)
+        {
+            LogInformation($"Open-list trigger '{selector}' not found — continuing without it.");
+            return;
+        }
+        await trigger.ClickAsync(new LocatorClickOptions { Timeout = 8000 });
+        await page.WaitForTimeoutAsync(1500); // let the revealed list render
+        LogInformation($"Opened store list via '{selector}'.");
+    }
+
     /// <summary>Best-effort dismissal of a cookie-consent overlay so it stops intercepting clicks.</summary>
     private async Task DismissCookieBannerAsync(IPage page)
     {
@@ -230,6 +250,7 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         {
             "#submitAllCategoriesButton",                 // Cookie Information CMP (heidenreich)
             "#coiOverlay button.coi-banner__accept",
+            "#onetrust-accept-btn-handler",               // OneTrust CMP
             "button:has-text('Godta alle')",
             "button:has-text('Aksepter alle')",
             "button:has-text('Tillat alle')",
@@ -535,10 +556,18 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
     {
         if (_browser != null) return _browser;
         _playwright = await Playwright.CreateAsync();
-        _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+
+        var launchOptions = new BrowserTypeLaunchOptions { Headless = _options.Headless };
+
+        // Empty path → use Playwright's default (bundled) browser; otherwise launch the given executable
+        // (e.g. a system Chromium on Linux: /usr/bin/ungoogled-chromium).
+        if (!string.IsNullOrWhiteSpace(_options.PlaywrightBrowserExecutablePath))
         {
-            Headless = _options.Headless
-        });
+            launchOptions.ExecutablePath = _options.PlaywrightBrowserExecutablePath;
+            LogInformation($"Using custom browser executable: {_options.PlaywrightBrowserExecutablePath}");
+        }
+
+        _browser = await _playwright.Chromium.LaunchAsync(launchOptions);
         return _browser;
     }
 

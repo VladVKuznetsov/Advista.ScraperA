@@ -1,12 +1,22 @@
 [
   {
-    "Title": "Alta",
-    "FullAddress": "Blåskjellveien 7, 9515 Alta",
-    "AddressLine": "Blåskjellveien 7",
-    "AddressZip": "9515",
-    "AddressCity": "Alta",
-    "Telephone": "+4778431692",
-    "Email": "firmapost@heidenreich.no",
-    "Url": "https://www.heidenreich.no/butikker/heidenreich-alta"
+    "Title": "XL-BYGG Alna",
+    "FullAddress": "Verkseier Furulunds Vei 9, 0668 Oslo",
+    "AddressLine": "Verkseier Furulunds Vei 9",
+    "AddressZip": "0668",
+    "AddressCity": "Oslo",
+    "Telephone": "+4723177400",
+    "Email": "felles.alna@xl-bygg.no",
+    "Url": "https://www.xl-bygg.no/butikker/xl-bygg-alna"
+  },
+  {
+    "Title": "XL-BYGG Arna",
+    "FullAddress": "Storaneset 20, 5260 Indre Arna",
+    "AddressLine": "Storaneset 20",
+    "AddressZip": "5260",
+    "AddressCity": "Indre Arna",
+    "Telephone": "+4755348700",
+    "Email": "felles.arna@xl-bygg.no",
+    "Url": "https://www.xl-bygg.no/butikker/xl-bygg-arna"
   }
 ]

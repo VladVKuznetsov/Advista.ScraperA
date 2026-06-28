@@ -53,4 +53,10 @@ public sealed class AnthropicBrowserOptions
 
     /// <summary>File to append the Claude call log to (used only when <see cref="AnthropicAutomationCallLog"/> is true).</summary>
     public string? AnthropicAutomationCallLogPath { get; set; }
+
+    /// <summary>Custom browser executable for Puppeteer-based tools. Empty = use the default browser.</summary>
+    public string PuppeteerBrowserExecutablePath { get; set; } = string.Empty;
+
+    /// <summary>Custom browser executable for Playwright. Empty = use Playwright's default (bundled) browser.</summary>
+    public string PlaywrightBrowserExecutablePath { get; set; } = string.Empty;
 }

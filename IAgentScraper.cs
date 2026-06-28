@@ -15,10 +15,15 @@ public interface IAgentScraper
     /// ISO region code used to format phone numbers to E.164 when they carry no international
     /// trunk prefix (e.g. "NO" for Norway).
     /// </param>
+    /// <param name="openListSelector">
+    /// Optional CSS selector clicked once after load to reveal a list hidden behind a trigger
+    /// (e.g. a drawer/modal opener). Null = no pre-click.
+    /// </param>
     Task<List<DepartmentAnthAuto>> ExtractAsync(
         string url,
         string prompt,
         string? tips = null,
         string defaultCountry = "NO",
+        string? openListSelector = null,
         CancellationToken ct = default);
 }

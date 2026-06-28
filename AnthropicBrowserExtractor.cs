@@ -43,6 +43,7 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
         string url,
         string? tips = null,
         string defaultCountry = "NO",
+        string? openListSelector = null,
         CancellationToken ct = default)
     {
         try
@@ -65,7 +66,7 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
 
             await using var scraper = new PlaywrightAgentScraper(claude, options, _managerOptions, _logger);
 
-            var departments = await scraper.ExtractAsync(url, Prompt, tips, defaultCountry, ct);
+            var departments = await scraper.ExtractAsync(url, Prompt, tips, defaultCountry, openListSelector, ct);
 
             if (departments.Count == 0)
                 return (new List<DepartmentAnthAuto>(), $"No departments could be extracted from {url}. Check the URL and tips.");
@@ -88,6 +89,7 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
     private void EnsureBrowsersInstalled(AnthropicBrowserOptions options)
     {
         if (!options.AutoInstallBrowsers) return;
+        if (!string.IsNullOrWhiteSpace(options.PlaywrightBrowserExecutablePath)) return; // using a system browser
         if (Interlocked.Exchange(ref _browsersInstalled, 1) != 0) return; // already done this process
 
         if (_managerOptions.Value.VerboseChainProcess)
