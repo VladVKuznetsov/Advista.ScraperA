@@ -46,6 +46,8 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         string? tips = null,
         string defaultCountry = "NO",
         string? openListSelector = null,
+        string? expandSelector = null,
+        bool inlinePage = false,
         CancellationToken ct = default)
     {
         var browser = await GetBrowserAsync();
@@ -63,6 +65,16 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
             Timeout = _options.NavigationTimeoutMs
         });
         await DismissCookieBannerAsync(page); // consent is stored on the context → only needed once
+        await ExpandAllAsync(page, expandSelector); // open every collapsible section (accordions) if asked
+
+        // ── Inline mode: all departments live on this one page (no per-department subpages) ──
+        if (inlinePage)
+        {
+            var inlineDepts = await ExtractDepartmentsFromInlinePageAsync(page, page.Url, prompt, tips, defaultCountry, ct);
+            LogInformation($"Extracted {inlineDepts.Count} department(s) from the page.");
+            return RemoveRepeatedContactSets(inlineDepts);
+        }
+
         await OpenListAsync(page, openListSelector); // reveal the list if it's behind a trigger (e.g. a drawer)
         var listingUrl = page.Url;
 
@@ -226,6 +238,27 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
     }
 
     /// <summary>
+    /// Expands every collapsible section matching <paramref name="selector"/> (e.g. accordion
+    /// headers). Clicks the first still-matching element each pass, since expanding one typically
+    /// changes/removes it from the match set; bounded to avoid loops. No-op when selector is empty.
+    /// </summary>
+    private async Task ExpandAllAsync(IPage page, string? selector)
+    {
+        if (string.IsNullOrWhiteSpace(selector)) return;
+        var opened = 0;
+        for (var i = 0; i < 40; i++)
+        {
+            var el = page.Locator(selector).First;
+            if (await el.CountAsync() == 0) break;
+            try { await el.ClickAsync(new LocatorClickOptions { Timeout = 5000 }); }
+            catch { break; } // no longer clickable / none left
+            await page.WaitForTimeoutAsync(400);
+            opened++;
+        }
+        LogInformation($"Expanded {opened} collapsible section(s) via '{selector}'.");
+    }
+
+    /// <summary>
     /// Clicks <paramref name="selector"/> once to reveal a hidden store list (e.g. a drawer/modal
     /// opener) before discovery. No-op when the selector is null/empty or not present on the page.
     /// </summary>
@@ -323,6 +356,92 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         return dep;
     }
 
+    // ── Inline extraction: MANY departments from ONE page (no per-department subpages) ──
+
+    private async Task<List<DepartmentAnthAuto>> ExtractDepartmentsFromInlinePageAsync(IPage page, string url, string prompt, string? tips, string defaultCountry, CancellationToken ct)
+    {
+        var payload = await page.EvaluateAsync<string>(InlinePagePayloadJs);
+
+        const string system = """
+            You extract ALL department / office contact records from a SINGLE page that lists many
+            offices inline (there are no per-office subpages). Return EVERY physical office as its own record.
+
+            Rules:
+            - Title: the office / location name (usually a place or city name).
+            - Split each office's address into street line, 4-digit postal code and city.
+            - telephone / email: use the office's own if it shows one; otherwise use the contact person
+              given for that office's region/section (e.g. "Kontaktperson Region ..."). Prefer a real
+              value over blank. Phones may be plain text like "+47 45 44 29 43".
+            - fullAddress = "AddressLine, AddressZip AddressCity".
+            - Ignore the top index/navigation list and any site header/footer that are not offices.
+            - Do NOT invent data — leave a field "" if it is truly absent.
+
+            Respond with ONLY this JSON (no prose, no fences):
+            {"departments":[{"title":"","fullAddress":"","addressLine":"","addressZip":"","addressCity":"","telephone":"","email":""}]}
+            If the page has no offices, respond {"departments":[]}.
+            """;
+
+        var user = $"""
+            User goal: {prompt}
+
+            Human tips:
+            {TipsOrNone(tips)}
+
+            Page URL: {url}
+            Page content (JSON — visible text of the whole page plus any mailto/tel links):
+            {payload}
+            """;
+
+        // Allow a larger response — a page can hold many offices.
+        var reply = await AskClaudeAsync(system, user, ct, maxTokensOverride: Math.Max(_options.MaxTokens, 4096));
+        var deps = ParseDepartments(reply);
+
+        foreach (var dep in deps)
+        {
+            dep.Url = url;
+            dep.Telephone = FormatPhoneE164(dep.Telephone, defaultCountry);
+            if (string.IsNullOrWhiteSpace(dep.FullAddress))
+                dep.FullAddress = BuildFullAddress(dep);
+        }
+        return deps;
+    }
+
+    // No try/catch: a malformed model response throws (JsonException) and surfaces as parseError.
+    // Accepts either a bare array or {"departments":[...]}. String values are HTML-decoded.
+    private static List<DepartmentAnthAuto> ParseDepartments(string reply)
+    {
+        var list = new List<DepartmentAnthAuto>();
+        using var doc = JsonDocument.Parse(StripFences(reply));
+        var root = doc.RootElement;
+
+        JsonElement arr;
+        if (root.ValueKind == JsonValueKind.Array) arr = root;
+        else if (!root.TryGetProperty("departments", out arr) || arr.ValueKind != JsonValueKind.Array) return list;
+
+        foreach (var e in arr.EnumerateArray())
+        {
+            string Get(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String
+                ? WebUtility.HtmlDecode(v.GetString()!).Trim()
+                : string.Empty;
+
+            var title = Get("title");
+            var line = Get("addressLine");
+            if (title.Length == 0 && line.Length == 0) continue; // skip empty rows
+
+            list.Add(new DepartmentAnthAuto
+            {
+                Title = title,
+                FullAddress = Get("fullAddress"),
+                AddressLine = line,
+                AddressZip = Get("addressZip"),
+                AddressCity = Get("addressCity"),
+                Telephone = Get("telephone"),
+                Email = Get("email"),
+            });
+        }
+        return list;
+    }
+
     /// <summary>Formats a phone to E.164 (e.g. +4755538600); returns the trimmed original if unparseable.</summary>
     private static string FormatPhoneE164(string? raw, string defaultCountry)
     {
@@ -367,7 +486,7 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
 
     // ── Claude helpers ────────────────────────────────────────────────────────
 
-    private async Task<string> AskClaudeAsync(string system, string user, CancellationToken ct)
+    private async Task<string> AskClaudeAsync(string system, string user, CancellationToken ct, int? maxTokensOverride = null)
     {
         var callNumber = Interlocked.Increment(ref _callCount);
 
@@ -375,7 +494,7 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
         var parms = new MessageCreateParams
         {
             Model = _options.Model,
-            MaxTokens = _options.MaxTokens,
+            MaxTokens = maxTokensOverride ?? _options.MaxTokens,
             Temperature = _options.Temperature,
             System = system,
             Messages = new List<MessageParam> { new() { Role = Role.User, Content = user } }
@@ -547,6 +666,19 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
           let text = (document.body.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
           if (text.length > 4000) text = text.slice(0, 4000);
           return JSON.stringify({ title: document.title, headings, tels, mails, text });
+        }
+        """;
+
+    /// <summary>Payload for inline mode: the whole page's visible text plus any mailto/tel links.</summary>
+    private const string InlinePagePayloadJs = """
+        () => {
+          const mails = [...new Set(Array.from(document.querySelectorAll('a[href^="mailto:"]'))
+            .map(a => (a.getAttribute('href') || '').replace('mailto:', '').split('?')[0].trim()).filter(Boolean))];
+          const tels = [...new Set(Array.from(document.querySelectorAll('a[href^="tel:"]'))
+            .map(a => (a.getAttribute('href') || '').replace('tel:', '').trim()).filter(Boolean))];
+          let text = (document.body.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+          if (text.length > 14000) text = text.slice(0, 14000);
+          return JSON.stringify({ mails, tels, text });
         }
         """;
 

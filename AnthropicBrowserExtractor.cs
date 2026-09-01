@@ -44,6 +44,8 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
         string? tips = null,
         string defaultCountry = "NO",
         string? openListSelector = null,
+        string? expandSelector = null,
+        bool inlinePage = false,
         CancellationToken ct = default)
     {
         try
@@ -66,7 +68,7 @@ public sealed class AnthropicBrowserExtractor : IAnthropicBrowserExtractor
 
             await using var scraper = new PlaywrightAgentScraper(claude, options, _managerOptions, _logger);
 
-            var departments = await scraper.ExtractAsync(url, Prompt, tips, defaultCountry, openListSelector, ct);
+            var departments = await scraper.ExtractAsync(url, Prompt, tips, defaultCountry, openListSelector, expandSelector, inlinePage, ct);
 
             if (departments.Count == 0)
                 return (new List<DepartmentAnthAuto>(), $"No departments could be extracted from {url}. Check the URL and tips.");

@@ -62,6 +62,10 @@ var extractor = new AnthropicBrowserExtractor(
 
 // openListSelector: clicked once after load to reveal a list hidden behind a trigger (biltema). Null otherwise.
 string? openListSelector = null;
+// expandSelector: accordion headers to expand before reading (bufarkompetanse). inlinePage: all
+// departments are on this one page (no per-department subpages) so extract a list from it.
+string? expandSelector = null;
+var inlinePage = false;
 
 // ── heidenreich.no (JS-navigation <li>s, no href — agent clicks them) ──
 // var url = "https://www.heidenreich.no/butikker";
@@ -85,21 +89,37 @@ string? openListSelector = null;
 //     """;
 
 // ── biltema.no (store list hidden in a drawer opened by clicking #react__storeselector) ──
-var url = "https://www.biltema.no/";
-openListSelector = "#react__storeselector";
+// var url = "https://www.biltema.no/";
+// openListSelector = "#react__storeselector";
+// var tips = """
+//     The store/department links are <a> anchors whose href looks like
+//     "https://www.biltema.no/varehus/<store>/" (for example "https://www.biltema.no/varehus/alta/").
+//     They live in a side drawer (a <ul class="storeselector">) that opens after the page loads. Each
+//     anchor's visible text is the store/city name. Select every anchor whose href matches the
+//     "/varehus/<store>/" pattern — each opens one store's detail page. The same store may appear more
+//     than once; duplicates are fine. Ignore navigation, language, social and footer links.
+//     """;
+
+// ── bufarkompetanse.no/kontakt (INLINE: all offices on one page, inside region accordions) ──
+var url = "https://www.bufarkompetanse.no/kontakt";
+expandSelector = "[data-framer-name$='closed']"; // region accordions are collapsed by default
+inlinePage = true;                                // no per-office subpages — read them all from this page
 var tips = """
-    The store/department links are <a> anchors whose href looks like
-    "https://www.biltema.no/varehus/<store>/" (for example "https://www.biltema.no/varehus/alta/").
-    They live in a side drawer (a <ul class="storeselector">) that opens after the page loads. Each
-    anchor's visible text is the store/city name. Select every anchor whose href matches the
-    "/varehus/<store>/" pattern — each opens one store's detail page. The same store may appear more
-    than once; duplicates are fine. Ignore navigation, language, social and footer links.
+    This page lists many offices ("kontorer") grouped by region (Hovedkontorfunksjoner, Region Nord,
+    Region Sør-vest, Region Sør-øst). The region accordions are already expanded when you read them.
+    Each office shows a location/name and a street address followed by a 4-digit postal code and
+    city (e.g. "Haugesund", "Norevegen 4", "5542 Karmsund"). Extract EVERY office as one department.
+    Phones are plain text like "+47 45 44 29 43"; emails look like name@bufarkompetanse.no. If an
+    office has no own phone/email, use the "Kontaktperson Region ..." contact shown for that region.
+    Ignore the top index list ("Finn våre kontorer") and the site navigation/footer.
     """;
 
 var (departments, parseError) = await extractor.ExtractAsync(
     url: url,
     tips: tips,
-    openListSelector: openListSelector
+    openListSelector: openListSelector,
+    expandSelector: expandSelector,
+    inlinePage: inlinePage
 );
 
 // ── Output ────────────────────────────────────────────────────────────────────

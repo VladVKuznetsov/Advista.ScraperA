@@ -19,11 +19,21 @@ public interface IAgentScraper
     /// Optional CSS selector clicked once after load to reveal a list hidden behind a trigger
     /// (e.g. a drawer/modal opener). Null = no pre-click.
     /// </param>
+    /// <param name="expandSelector">
+    /// Optional CSS selector for collapsible sections (accordion headers) to expand before
+    /// extraction. Every matching element is clicked. Null = nothing to expand.
+    /// </param>
+    /// <param name="inlinePage">
+    /// When true, all departments live on this single page (no per-department subpages): the whole
+    /// page is read and a list of departments is extracted from it, instead of discovering links.
+    /// </param>
     Task<List<DepartmentAnthAuto>> ExtractAsync(
         string url,
         string prompt,
         string? tips = null,
         string defaultCountry = "NO",
         string? openListSelector = null,
+        string? expandSelector = null,
+        bool inlinePage = false,
         CancellationToken ct = default);
 }
