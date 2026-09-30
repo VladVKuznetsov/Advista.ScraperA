@@ -101,17 +101,38 @@ var inlinePage = false;
 //     """;
 
 // ── bufarkompetanse.no/kontakt (INLINE: all offices on one page, inside region accordions) ──
-var url = "https://www.bufarkompetanse.no/kontakt";
-expandSelector = "[data-framer-name$='closed']"; // region accordions are collapsed by default
-inlinePage = true;                                // no per-office subpages — read them all from this page
+// var url = "https://www.bufarkompetanse.no/kontakt";
+// expandSelector = "[data-framer-name$='closed']"; // region accordions are collapsed by default
+// inlinePage = true;                                // no per-office subpages — read them all from this page
+// var tips = """
+//     This page lists many offices ("kontorer") grouped by region (Hovedkontorfunksjoner, Region Nord,
+//     Region Sør-vest, Region Sør-øst). The region accordions are already expanded when you read them.
+//     Each office shows a location/name and a street address followed by a 4-digit postal code and
+//     city (e.g. "Haugesund", "Norevegen 4", "5542 Karmsund"). Extract EVERY office as one department.
+//     Phones are plain text like "+47 45 44 29 43"; emails look like name@bufarkompetanse.no. If an
+//     office has no own phone/email, use the "Kontaktperson Region ..." contact shown for that region.
+//     Ignore the top index list ("Finn våre kontorer") and the site navigation/footer.
+//     """;
+
+// ── classicnorway.no/hoteller (hotel list in a "Velg hotell" dropdown; each hotel has its OWN domain) ──
+var url = "https://classicnorway.no/hoteller/";
+openListSelector = ".term-post-list-trigger"; // the "Velg hotell" div that opens the hotel list
 var tips = """
-    This page lists many offices ("kontorer") grouped by region (Hovedkontorfunksjoner, Region Nord,
-    Region Sør-vest, Region Sør-øst). The region accordions are already expanded when you read them.
-    Each office shows a location/name and a street address followed by a 4-digit postal code and
-    city (e.g. "Haugesund", "Norevegen 4", "5542 Karmsund"). Extract EVERY office as one department.
-    Phones are plain text like "+47 45 44 29 43"; emails look like name@bufarkompetanse.no. If an
-    office has no own phone/email, use the "Kontaktperson Region ..." contact shown for that region.
-    Ignore the top index list ("Finn våre kontorer") and the site navigation/footer.
+    The hotel list is inside a <div class="term-post-list"> (opened by the "Velg hotell" dropdown),
+    grouped by region (Lofoten, …). Each hotel is an <a> anchor with class "post-name" whose visible
+    text is the hotel name. These links point to EXTERNAL domains — each hotel has its own website
+    (e.g. "https://arorbuer.no/?utm_source=webpage&utm_medium=classicnorway.no…",
+    "https://grandhotel.no/…") — NOT classicnorway.no. Select every anchor with class "post-name"
+    EXCEPT "Restaurant SKREI" (a restaurant, not a hotel). Ignore classicnorway.no's own
+    navigation, "Kontakt", booking, social and footer links.
+    On each hotel's website the hotel's OWN contact block is in the page FOOTER, e.g.
+    "GRAND HOTEL / Sentralbord: 71 22 75 00 / post@grandhotel.no / Åndalgata 5, 6300 Åndalsnes".
+    Use that footer block — it IS the department contact here (each hotel site is separate, so it
+    is not a shared head-office footer). Title = the hotel name. Phone = the "Sentralbord" / "T"
+    number. Ignore "Classic Norway Hotels" chain-level links (Gavekort, Magasin, Miljøprofil …).
+    Some footers have no street address (only "6298 Ona", or none at all). Lines with a distance
+    like "Togstasjon 200 m", "Lufthavn 62 km" or "Butikk 200 m" are NOT addresses — never use them;
+    leave addressLine "" when no street is shown.
     """;
 
 var (departments, parseError) = await extractor.ExtractAsync(

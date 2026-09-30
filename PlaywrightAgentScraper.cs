@@ -664,7 +664,8 @@ public sealed class PlaywrightAgentScraper : IAgentScraper, IAsyncDisposable
           const mails = [...new Set(Array.from(document.querySelectorAll('a[href^="mailto:"]'))
             .map(a => (a.getAttribute('href') || '').replace('mailto:', '').split('?')[0].trim()).filter(Boolean))];
           let text = (document.body.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
-          if (text.length > 4000) text = text.slice(0, 4000);
+          // Keep the head AND the tail: some sites (e.g. classicnorway hotels) put the contact block in the footer.
+          if (text.length > 6000) text = text.slice(0, 3000) + '\n…\n' + text.slice(-3000);
           return JSON.stringify({ title: document.title, headings, tels, mails, text });
         }
         """;
